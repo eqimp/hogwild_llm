@@ -9,7 +9,7 @@ Official PyTorch implementation for  [Hogwild! Inference: Parallel LLM Generatio
   </picture>
   <br>
   <div align="center" width="80%">
-  <em>Medusa-1 on Vicuna-7b.</em>
+  <em>Hogwild! Inference.</em>
   </div>
   <br>
 </div>
