@@ -3,8 +3,16 @@
 Official PyTorch implementation for  [Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache](...)
 
 ## Demo
-
-![Candidate1(1)](https://github.com/user-attachments/assets/b842e693-bdb9-46d5-acef-9cfbce42911b)
+<div align="center">
+  <picture>
+  <img src="https://github.com/user-attachments/assets/b842e693-bdb9-46d5-acef-9cfbce42911b" width="80%">
+  </picture>
+  <br>
+  <div align="center" width="80%">
+  <em>Medusa-1 on Vicuna-7b.</em>
+  </div>
+  <br>
+</div>
 
 
 ## Inference with shared cache:
