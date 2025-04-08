@@ -4,7 +4,7 @@ Official PyTorch implementation for  [Hogwild! Inference: Parallel LLM Generatio
 
 ## Demo
 
-https://github.com/user-attachments/assets/e0eed2bb-3e96-41a5-8f48-176eda2dbacc
+![Candidate1(1)](https://github.com/user-attachments/assets/b842e693-bdb9-46d5-acef-9cfbce42911b)
 
 
 ## Inference with shared cache:
