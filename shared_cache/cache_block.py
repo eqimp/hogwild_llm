@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import os
+import warnings
 from typing import Dict, Tuple, Any, Optional
 import torch
 import transformers
@@ -36,7 +38,7 @@ class CacheBlock(transformers.cache_utils.DynamicCache):
     def append(self, key_states: torch.Tensor, value_states: torch.Tensor, layer_idx: int, cache_kwargs: Dict[str, Any],
                ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Add key/value states to the cache, rotate keys so that their positions are at the end of the preceding key"""
-        assert all(key in cache_kwargs for key in ('cos', 'sin', 'cache_position'))
+        assert all(key in cache_kwargs for key in ('cos', 'sin', 'cache_position')), cache_kwargs
         assert len(cache_kwargs['cache_position']) == key_states.shape[-2] == value_states.shape[-2]
         # rotate keys so their new positions start immediately after the last pre-existing position
         first_available_position = self.first_available_positions_by_layer.setdefault(layer_idx, 0)
@@ -143,10 +145,19 @@ def _compute_rotary_cos_sin(
 @torch.compile(dynamic=None, disable=bool(int(os.environ.get("HOGWILD_NO_COMPILE", False))))
 def _apply_rotary_cos_sin(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
     """Rotates half the hidden dims of the input."""
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2:]
-    x_rotated_half = torch.cat((-x2, x1), dim=-1)
-    return (x * cos) + (x_rotated_half * sin)
+    x_dim, pe_dim = x.shape[-1], cos.shape[-1]
+    x_pe = x
+    if x_dim != pe_dim:
+        x_pe = x[..., -pe_dim:]
+
+    x1 = x_pe[..., : x_pe.shape[-1] // 2]
+    x2 = x_pe[..., x_pe.shape[-1] // 2:]
+    x_pe_rotated_half = torch.cat((-x2, x1), dim=-1)
+    y = (x_pe * cos) + (x_pe_rotated_half * sin)
+    if x_dim != pe_dim:
+        y = torch.cat([x[..., :-pe_dim], y], dim=-1)
+    return y
+
 
 
 _CACHED_ROPE_PARAMS = _CACHED_ROPE_INIT = None  # this is a makeshift functools.lru_cache w/o hashing
@@ -161,7 +172,19 @@ def _get_rope_init(config: transformers.PretrainedConfig, device: torch.device):
         rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
     else:
         rope_type = "default"
-    inv_freq, attention_scaling = transformers.modeling_rope_utils.ROPE_INIT_FUNCTIONS[rope_type](config, device)
+
+    if config.model_type == 'deepseek_v3':
+        config_init = copy.deepcopy(config)
+        assert getattr(config, "head_dim", None) is None
+        assert config.rope_scaling.get('attention_factor', 1.0) == 1.0
+        config_init.head_dim = config.qk_rope_head_dim
+        config_init.rope_scaling['attention_factor'] = 1.0
+    else:
+        if config.model_type not in ("llama", "qwen2"):
+            warnings.warn(f"untested model type {config.model_type}")
+        config_init = config
+
+    inv_freq, attention_scaling = transformers.modeling_rope_utils.ROPE_INIT_FUNCTIONS[rope_type](config_init, device)
     _CACHED_ROPE_PARAMS, _CACHED_ROPE_INIT = (config, device), (inv_freq, attention_scaling)
     assert "dynamic" not in rope_type
     return inv_freq, attention_scaling
