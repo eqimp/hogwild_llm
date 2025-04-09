@@ -274,7 +274,7 @@ To decide how best to collaborate, I will periodically, every few steps or more 
 
 {rules}
 
-{combined_examples if include_examples else ""}
+{combined_examples if include_examples else suggestions_on_collaborating}
 
 # Solve the following problem
 
