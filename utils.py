@@ -338,8 +338,6 @@ def generate_reasoning_2agents(
     ]
     assert len(worker_prompts) == len(Formatting.workers)
 
-
-
     # make a sampler from model generation_config
     generation_config, model_kwargs = model._prepare_generation_config(model.generation_config)
     model._prepare_special_tokens(generation_config)
@@ -403,7 +401,7 @@ def generate_reasoning_2agents(
                 if tokens_since_last_wait > insert_s1_collab_message_every_tokens:
                     start_msg += Formatting.s1_collab_message
                     tokens_since_last_wait = 0
-                worker_tokens.extend(tokenizer.encode(start_msg))
+                worker_tokens.extend(tokenizer.encode(start_msg, add_special_tokens=False))
                 cache_common.append_from(cm.cache_structure[worker_index][-1])
                 cm.cache_structure[worker_index][-1].clear()
                 next_input_tokens[worker_index] = [new_token] + worker_tokens
@@ -415,10 +413,10 @@ def generate_reasoning_2agents(
     for budget, saved_state in saved_states.items():
         output = tokenizer(Formatting.get_full_prompt(problem), **tokenizer_kwargs)['input_ids'].flatten().tolist()
         output.extend(saved_state["history"])
-        output.extend(tokenizer.encode(Formatting.current_step_header))
+        output.extend(tokenizer.encode(Formatting.current_step_header, add_special_tokens=False))
         for worker_index, worker_tokens in enumerate(saved_state['current_step_tokens_by_worker']):
             output.extend(worker_tokens)
-            output.extend(tokenizer.encode(Formatting.pivot_message + Formatting.SEP))
+            output.extend(tokenizer.encode(Formatting.pivot_message + Formatting.SEP, add_special_tokens=False))
 
         response: str = tokenizer.decode(output)
         if finisher_max_new_tokens > 0:
