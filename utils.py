@@ -28,13 +28,6 @@ def get_math_input_prompts(tokenizer: transformers.PreTrainedTokenizer, workers:
         forbidden_token_ix = [tokenizer.vocab[x] for x in ["#", tokenizer.bos_token, tokenizer.eos_token, '</think>']
                               if x in tokenizer.vocab]
         end_of_step_chars = ['.', '?', '!', '。', '۔', '؟', '।', '॥', '…', '‽', '།', '᠃', '։', '჻', '¶', '❧']  # before SEP
-
-        worker_prompts = [
-            f"""{get_step_prefix(_w[0], 1)}Hi, I'm {_w[0]}. Here's how we should do this:""".strip(),
-            f"""{get_step_prefix(_w[1], 1)}Hi, I'm {_w[1]}.""".strip()
-        ]
-        assert len(worker_prompts) == len(workers)
-
         final_answer_example = "\\boxed{number here}"
 
         @staticmethod
@@ -338,6 +331,14 @@ def generate_reasoning_2agents(
     Formatting = get_math_input_prompts(tokenizer)
     tokenizer_kwargs = dict(return_tensors='pt', padding=True, padding_side='left', add_special_tokens=False)
     device = next(model.parameters()).device
+    workers = Formatting.workers
+    worker_prompts = [
+        f"""{Formatting.get_step_prefix(workers[0], 1)}Hi, I'm {workers[0]}. Here's how we should do this:""".strip(),
+        f"""{Formatting.get_step_prefix(workers[1], 1)}Hi, I'm {workers[1]}.""".strip()
+    ]
+    assert len(worker_prompts) == len(Formatting.workers)
+
+
 
     # make a sampler from model generation_config
     generation_config, model_kwargs = model._prepare_generation_config(model.generation_config)
@@ -365,11 +366,11 @@ def generate_reasoning_2agents(
 
     # generate interdependent reasoning chains in parallel
     current_step_index_by_worker = [1, 1]
-    current_step_tokens_by_worker = tokenizer(Formatting.worker_prompts, add_special_tokens=False)['input_ids']
+    current_step_tokens_by_worker = tokenizer(worker_prompts, add_special_tokens=False)['input_ids']
     generation_stopped = False
     history = list()
 
-    next_inputs = tokenizer(Formatting.worker_prompts, **tokenizer_kwargs).to(device)
+    next_inputs = tokenizer(worker_prompts, **tokenizer_kwargs).to(device)
     for inference_step in range(max_steps + 1):
         if inference_step in save_on_steps or inference_step == max_steps:
             saved_states[inference_step] = dict(
