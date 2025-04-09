@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <!-- Meta tags for social media banners, these should be filled in appropriatly as they are your "business card" -->
+  <!-- Replace the content tag with appropriate information -->
+  <meta name="description" content="LLMs can write text in parallel like humans use Google Docs. They reason in parallel, reusing each other’s KV memory. When prompted, they self-organize and split the work.">
+  <meta property="og:title" content="Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache"/>
+  <meta property="og:description" content="LLMs can write text in parallel like humans use Google Docs. They reason in parallel, reusing each other’s KV memory. When prompted, they self-organize and split the work."/>
+  <meta property="og:url" content="https://yandex-research.github.io/vqdm/"/>
+  <!-- Path to banner image, should be in the path listed below. Optimal dimenssions are 1200X630-->
+  <meta property="og:image" content="static/images/vqdm_overview_wo_input_scales.png" />
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+
+
+  <meta name="twitter:title" content="Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache">
+  <meta name="twitter:description" content="LLMs can write text in parallel like humans use Google Docs. They reason in parallel, reusing each other’s KV memory. When prompted, they self-organize and split the work.">
+  <!-- Path to banner image, should be in the path listed below. Optimal dimenssions are 1200X600-->
+  <meta name="twitter:image" content="static/images/vqdm_overview_wo_input_scales.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <!-- Keywords for your paper to be indexed by-->
+  <meta name="keywords" content="LLM, parallel generation , NN agents">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+  <title>Hogwild! Inference</title>
+  <link rel="icon" type="image/x-icon" href="static/images/favicon.ico">
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+  rel="stylesheet">
+
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://documentcloud.adobe.com/view-sdk/main.js"></script>
+  <script defer src="static/js/fontawesome.all.min.js"></script>
+  <script src="static/js/bulma-carousel.min.js"></script>
+  <script src="static/js/bulma-slider.min.js"></script>
+  <script src="static/js/index.js"></script>
+</head>
+<body>
+
+
+  <section class="hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <h1 class="title is-1 publication-title">Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache</h1>
+            <div class="is-size-5 publication-authors">
+              <!-- Paper authors -->
+              <span class="author-block">
+                <a href="SECOND AUTHOR PERSONAL LINK" target="_blank">Gleb Rodionov</a><sup>* 1</sup>,</span>
+                <span class="author-block">
+                  <a href="SECOND AUTHOR PERSONAL LINK" target="_blank">Roman Garipov</a><sup>* 1, 2</sup>,</span>
+                  <span class="author-block">
+                    <a href="SECOND AUTHOR PERSONAL LINK" target="_blank">Alina Shutova</a><sup>* 1, 2</sup>,</span>
+                   <span class="author-block">
+                  <a href="SECOND AUTHOR PERSONAL LINK" target="_blank"> George Yakushev</a><sup>* 1, 2</sup>,</span>
+                   <span class="author-block">
+                  <a href="https://scholar.google.com/citations?user=Bktg6JEAAAAJ" target="_blank">Vage Egiazarian</a><sup>3</sup>,</span>
+                   <span class="author-block">
+                  <a href="SECOND AUTHOR PERSONAL LINK" target="_blank">Anton Sinitsin</a><sup>1</sup>,</span>
+                  <span class="author-block">
+                    <a href="https://scholar.google.com/citations?user=L78B2lcAAAAJ" target="_blank">Denis Kuznedelev</a><sup>1</sup>
+                  <span class="author-block">
+                  <a href="https://scholar.google.com/citations?user=75q-6ZQAAAAJ" target="_blank">Dan Alistarh</a><sup>3</sup>,</span>
+                  </span>
+
+                  </div>
+
+                 <div class="is-size-5 publication-authors">
+                    <span class="author-block"><sup>1</sup>Yandex &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <sup>2</sup>HSE University</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                   <sup>3</sup>IST Austria</span>
+                   <!-- <br>Conferance name and year -->
+                    <span class="eql-cntrb"><small><br><sup>*</sup>Indicates Equal Contribution</small></span>
+                  </div>
+
+                  <div class="column has-text-centered">
+                    <div class="publication-links">
+                         <!-- Arxiv PDF link -->
+                      <span class="link-block">
+                        <a href="https://arxiv.org/pdf/2504.06261" target="_blank"
+                        class="external-link button is-normal is-rounded is-dark">
+                        <span class="icon">
+                          <i class="fas fa-file-pdf"></i>
+                        </span>
+                        <span>Paper</span>
+                      </a>
+                    </span>
+
+<!--                    &lt;!&ndash; Supplementary PDF link &ndash;&gt;-->
+<!--                    <span class="link-block">-->
+<!--                      <a href="static/pdfs/supplementary_material.pdf" target="_blank"-->
+<!--                      class="external-link button is-normal is-rounded is-dark">-->
+<!--                      <span class="icon">-->
+<!--                        <i class="fas fa-file-pdf"></i>-->
+<!--                      </span>-->
+<!--                      <span>Supplementary</span>-->
+<!--                    </a>-->
+<!--                  </span>-->
+
+                  <!-- Github link -->
+                  <span class="link-block">
+                    <a href="https://github.com/eqimp/hogwild_llm" target="_blank"
+                    class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fab fa-github"></i>
+                    </span>
+                    <span>Code</span>
+                  </a>
+                </span>
+
+                <!-- ArXiv abstract Link -->
+                <span class="link-block">
+                  <a href="https://arxiv.org/abs/2504.06261" target="_blank"
+                  class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                    <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section class="section hero is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <!-- <h2 class="title is-3"></h2> -->
+        <div class="content has-text-justified">
+          <p>
+            
+            You know how LLMs <a href="https://openai.com/o1/"><u>can</u></a> <a href="https://www.anthropic.com/news/claude-3-7-sonnet"><u>solve</u></a> <a href="https://arcprize.org/blog/oai-o3-pub-breakthrough"><u>complex</u></a> <a href="https://www.perplexity.ai/hub/blog/introducing-perplexity-deep-research"><u>tasks</u></a> with <a href="https://arxiv.org/abs/2201.11903"><u>chain-of-thought</u></a> reasoning, and you can even  <a href="https://huggingface.co/deepseek-ai/DeepSeek-R1/"><u>run</u></a>  <a href="https://huggingface.co/Qwen/QwQ-32B"><u>this</u></a>  <a href="https://ai.meta.com/blog/llama-4-multimodal-intelligence/"><u>kind</u></a> of LLMs at <a href="https://openai.com/o1/home"><u>https://openai.com/o1/home</u></a>. Thing is, <b>LLMs still take a while to do that work</b>. 
+            OpenAI’s <a href="https://arcprize.org/blog/oai-o3-pub-breakthrough"><u>ARC breakthrough</u></a> took o3 tens of minutes per task. Even if you ask ChatGPT to do something routine, like draft a dozen emails or check your citation format, it will <a href="https://chatgpt.com/share/67efac9f-cb58-800d-8fe1-2d8cdc4aa5bf"><u>take its sweet time</u></a> doing every. single. row. one at a time. Now what if they could do that in parallel?<br>
+
+Running LLM instances in parallel is easy, but how do you make them work <b>well</b> together? 
+You can plan ahead and <a href="https://arxiv.org/abs/2307.15337"><u>split</u></a> the problem into sub-tasks, but the initial plan often breaks down and needs more complex re-planning. Or you could make them try different approaches and <a href="https://arxiv.org/abs/2406.04692"><u>debate</u></a>  the solution, which <a href="https://arxiv.org/abs/2406.04692"><u></u>works well</u></a>  for math problems – but not when you have a list of 10 routine tasks. <b>So why not let LLMs decide how they should collaborate?</b> <br>
+
+We hacked the attention mechanism to create a real-time workspace where LLM instances see each other’s thoughts as they happen. No pre-planned subtasks, no rules, no training — just multiple copies of the same model talking to each other, like editing a ‘google doc’ together. Turns out, reasoning LLMs like QwQ-32B can already reason about how to work together, doing sub-tasks in parallel, cross-checking each other & more– Check it out!
+
+
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<br>
+<!-- Teaser video-->
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+      <video borders="none" outline="none" poster="" id="tree" autoplay controls muted loop height="100%">
+        <!-- Your video here -->
+        <source src="static/videos/Candidate1.mp4"
+        type="video/mp4">
+      </video>
+      <h2 class="subtitle has-text-centered">
+      </h2>
+    </div>
+  </div>
+</section>
+
+<!-- <style>
+  video {
+    border: none;
+    outline: none;
+  }
+
+  video::-webkit-media-controls-panel {
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent; /* optional: make it fully clean */
+  }
+</style> -->
+<!-- Teaser video-->
+<!-- <section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+        <img src="static/images/overview_of_the_inference.png" alt="MY ALT TEXT"/>
+        <h2 class="subtitle has-text-centered">
+          Overview of Hogwild! Inference, with 2 workers generating in parallel and 3
+shared cache blocks.
+        </h2>
+    </div>
+  </div>
+</section> -->
+<!-- End teaser video -->
+
+<!-- Paper abstract -->
+
+<!-- End paper abstract -->
+
+<br>
+<br>
+<!-- </style> --> 
+<h2 class="subtitle has-text-centered">
+  Overview of Hogwild! Inference, with 2 workers generating in parallel and 3
+shared cache blocks.
+</h2>
+<!-- Teaser Image-->
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+        <img src="static/images/overview_of_the_inference.png" alt="MY ALT TEXT"/>
+        <!-- <h2 class="subtitle has-text-centered">
+          Overview of Hogwild! Inference, with 2 workers generating in parallel and 3
+shared cache blocks.
+        </h2> -->
+    </div>
+  </div>
+</section>
+<!-- End teaser Image -->
+
+<!--<h2 class="subtitle has-text-centered">-->
+<!--       <font size="20"> SDXL-Turbo</font>-->
+<!--</h2>-->
+
+  <!-- End image carousel -->
+
+<!--&lt;!&ndash; Youtube video &ndash;&gt;-->
+<!--<section class="hero is-small is-light">-->
+<!--  <div class="hero-body">-->
+<!--    <div class="container">-->
+<!--      &lt;!&ndash; Paper video. &ndash;&gt;-->
+<!--      <h2 class="title is-3">Video Presentation</h2>-->
+<!--      <div class="columns is-centered has-text-centered">-->
+<!--        <div class="column is-four-fifths">-->
+<!--          -->
+<!--          <div class="publication-video">-->
+<!--            &lt;!&ndash; Youtube embed code here &ndash;&gt;-->
+<!--            <iframe src="https://www.youtube.com/embed/JkaxUblCGz0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>-->
+<!--          </div>-->
+<!--        </div>-->
+<!--      </div>-->
+<!--    </div>-->
+<!--  </div>-->
+<!--</section>-->
+<!--&lt;!&ndash; End youtube video &ndash;&gt;-->
+
+
+<!--&lt;!&ndash; Video carousel &ndash;&gt;-->
+<!--<section class="hero is-small">-->
+<!--  <div class="hero-body">-->
+<!--    <div class="container">-->
+<!--      <h2 class="title is-3">Another Carousel</h2>-->
+<!--      <div id="results-carousel" class="carousel results-carousel">-->
+<!--        <div class="item item-video1">-->
+<!--          <video poster="" id="video1" autoplay controls muted loop height="100%">-->
+<!--            &lt;!&ndash; Your video file here &ndash;&gt;-->
+<!--            <source src="static/videos/carousel1.mp4"-->
+<!--            type="video/mp4">-->
+<!--          </video>-->
+<!--        </div>-->
+<!--        <div class="item item-video2">-->
+<!--          <video poster="" id="video2" autoplay controls muted loop height="100%">-->
+<!--            &lt;!&ndash; Your video file here &ndash;&gt;-->
+<!--            <source src="static/videos/carousel2.mp4"-->
+<!--            type="video/mp4">-->
+<!--          </video>-->
+<!--        </div>-->
+<!--        <div class="item item-video3">-->
+<!--          <video poster="" id="video3" autoplay controls muted loop height="100%">\-->
+<!--            &lt;!&ndash; Your video file here &ndash;&gt;-->
+<!--            <source src="static/videos/carousel3.mp4"-->
+<!--            type="video/mp4">-->
+<!--          </video>-->
+<!--        </div>-->
+<!--      </div>-->
+<!--    </div>-->
+<!--  </div>-->
+<!--</section>-->
+<!--&lt;!&ndash; End video carousel &ndash;&gt;-->
+
+
+
+
+
+
+<!--&lt;!&ndash; Paper poster &ndash;&gt;-->
+<!--<section class="hero is-small is-light">-->
+<!--  <div class="hero-body">-->
+<!--    <div class="container">-->
+<!--      <h2 class="title">Poster</h2>-->
+
+<!--      <iframe  src="static/pdfs/sample.pdf" width="100%" height="550">-->
+<!--          </iframe>-->
+<!--        -->
+<!--      </div>-->
+<!--    </div>-->
+<!--  </section>-->
+<!--&lt;!&ndash;End paper poster &ndash;&gt;-->
+
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <h2 class="subtitle has-text-centered">
+  Evaluation on 512 LIMO tasks. The horizontal black line corresponds to running single-threaded
+reasoning for 16384 tokens (Accuracy 89.65%).
+</h2>
+</div>
+</section>
+<!-- Teaser Image-->
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+        <img src="static/images/bar_plot.png" alt="MY ALT TEXT"/>
+    </div>
+  </div>
+</section>
+<!-- End teaser Image -->
+
+<!--BibTex citation -->
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <h2 class="title">BibTeX</h2>
+      <pre><code>@misc{rodionov2025hogwildinferenceparallelllm,
+        title={Hogwild! Inference: Parallel LLM Generation via Concurrent Attention}, 
+        author={Gleb Rodionov and Roman Garipov and Alina Shutova and George Yakushev and Vage Egiazarian and Anton Sinitsin and Denis Kuznedelev and Dan Alistarh},
+        year={2025},
+        eprint={2504.06261},
+        archivePrefix={arXiv},
+        primaryClass={cs.LG},
+        url={https://arxiv.org/abs/2504.06261}, 
+  }  
+</code></pre>
+    </div>
+</section>
+<!--End BibTex citation -->
+
+
+  <footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+
+          <p>
+            This page was built using the <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank">Academic Project Page Template</a> which was adopted from the <a href="https://nerfies.github.io" target="_blank">Nerfies</a> project page.
+            You are free to borrow the of this website, we just ask that you link back to this page in the footer. <br> This website is licensed under a <a rel="license"  href="http://creativecommons.org/licenses/by-sa/4.0/" target="_blank">Creative
+            Commons Attribution-ShareAlike 4.0 International License</a>.
+          </p>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Statcounter tracking code -->
+  
+<!-- You can add a tracker to track page visits by creating an account at statcounter.com -->
+
+    <!-- End of Statcounter Code -->
+
+  </body>
+  </html>

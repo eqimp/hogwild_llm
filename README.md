@@ -1,43 +1,7 @@
-#  Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache 
+# Github page for Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache
 
-Official PyTorch implementation for  [Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache](...)
+## Acknowledgments
+This page was constructed from [Academic Project Page Template](https://github.com/eliahuhorwitz/Academic-project-page-template).
 
-## Demo
-<div align="center">
-  <picture>
-  <img src="https://github.com/user-attachments/assets/b842e693-bdb9-46d5-acef-9cfbce42911b" width="80%">
-  </picture>
-  <br>
-  <div align="center" width="80%">
-  <em>Hogwild! Inference.</em>
-  </div>
-  <br>
-</div>
-
-
-## Inference with shared cache:
-
-### Dependencies
-
-Install packages from `requirements.txt`:
-```bash
-pip install -r requirements.txt
-```
-
-### Run with multiple workers
-
-To try inference described in the paper you can run jupyter notebooks from notebooks/ folder:
-
-
-Contiguous layout (token-wise): [./notebooks/demo_hogwild_inference.ipynb](./notebooks/demo_hogwild_inference.ipynb)
-
-Interleaved layout (step-wise): [./notebooks/demo_hogwild_inference_interleaved_s1like.ipynb](./notebooks/demo_hogwild_inference.ipynb)
-
-## Cite
-
-If you found this work useful, please consider citing:
-
-```
-@misc{
-}
-```
+## Website License
+<a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
