@@ -1,6 +1,12 @@
 #  Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache 
 
-Official PyTorch implementation for  [Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache](...)
+Official PyTorch implementation for Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache
+
+<p align="center">
+<a href="https://arxiv.org/abs/2504.06261v1"><b>arXiv paper 📚</b></a>  
+</p>
+
+---
 
 ## Demo
 <div align="center">
@@ -29,15 +35,22 @@ pip install -r requirements.txt
 To try inference described in the paper you can run jupyter notebooks from notebooks/ folder:
 
 
-Contiguous layout (token-wise): [./notebooks/demo_hogwild_inference.ipynb](./notebooks/demo_hogwild_inference.ipynb)
+Contiguous layout (token-wise): [demo_hogwild_inference.ipynb](./notebooks/demo_hogwild_inference.ipynb)
 
-Interleaved layout (step-wise): [./notebooks/demo_hogwild_inference_interleaved_s1like.ipynb](./notebooks/demo_hogwild_inference.ipynb)
+Interleaved layout (step-wise): [demo_hogwild_inference_interleaved_s1like.ipynb](./notebooks/demo_hogwild_inference.ipynb)
 
 ## Cite
 
 If you found this work useful, please consider citing:
 
 ```
-@misc{
+@misc{rodionov2025hogwildinferenceparallelllm,
+      title={Hogwild! Inference: Parallel LLM Generation via Concurrent Attention}, 
+      author={Gleb Rodionov and Roman Garipov and Alina Shutova and George Yakushev and Vage Egiazarian and Anton Sinitsin and Denis Kuznedelev and Dan Alistarh},
+      year={2025},
+      eprint={2504.06261},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2504.06261}, 
 }
 ```
