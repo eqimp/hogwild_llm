@@ -1,5 +1,5 @@
 <a href='https://arxiv.org/abs/2504.06261'><img src='https://img.shields.io/badge/ArXiv-PDF-red'></a> &nbsp; 
-<a href='https://eqimp.github.io/hogwild_llm><img src='https://img.shields.io/badge/Project-Page-Green'></a> &nbsp;
+<a href='https://eqimp.github.io/hogwild_llm'><img src='https://img.shields.io/badge/Project-Page-Green'></a> &nbsp;
 
 #  Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache 
 
