@@ -1,6 +1,8 @@
 #  Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache 
 
-Official PyTorch implementation for Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache
+Official PyTorch implementation for 
+
+`Hogwild! Inference: Parallel LLM Generation with a Concurrent Attention Cache`
 
 <p align="center">
 <a href="https://arxiv.org/abs/2504.06261v1"><b>arXiv paper 📚</b></a>  
