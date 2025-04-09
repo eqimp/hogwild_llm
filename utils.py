@@ -7,7 +7,9 @@ import transformers
 import shared_cache
 
 
-def get_math_input_prompts(tokenizer: transformers.PreTrainedTokenizer, workers: Sequence[str] = ("Alice", "Bob")):
+def get_math_input_prompts(tokenizer: transformers.PreTrainedTokenizer,
+                           workers: Sequence[str] = ("Alice", "Bob"),
+                           include_examples: bool = True):
     """Create a namespace with formatting, prompt components, etc - this one is tuned for Qwen models"""
     _w = workers
 
@@ -235,11 +237,7 @@ To decide how best to collaborate, I will periodically, every few steps or more 
 {get_step_prefix(_w[0], 4)}Wait, {_w[1]} has already started that equation before me and seems ahead of me, so I am doing redundant work. What can I do in the meantime?
     """.strip())
 
-        final_system_prompt = f"""
-# Collaborative Reasoning
-
-{rules}
-
+        combined_examples = f"""
 # Examples
 
 ## 1. Basic example of collaborating within one step
@@ -269,6 +267,14 @@ To decide how best to collaborate, I will periodically, every few steps or more 
 {example_step_avoid_redundancy_2}
 
 {example_step_avoid_redundancy_3}
+""".strip()
+
+        final_system_prompt = f"""
+# Collaborative Reasoning
+
+{rules}
+
+{combined_examples if include_examples else ""}
 
 # Solve the following problem
 
