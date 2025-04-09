@@ -8,7 +8,6 @@ import transformers
 
 from .cache_block import CacheBlock, using_rotary_cache
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -30,6 +29,8 @@ class CombinedCacheView(transformers.cache_utils.Cache):
 
     :param rotary_cache: (optional) a dictionary in which to cache intermediate rotary cos/sin values. If not specified,
         these values will not be cached and will be recomputed. To start a new cache, feed it an empty dict.
+
+    :param override_length: overrides get_usable_length computation to this value minus the provided input length
     """
 
     def __init__(
@@ -38,14 +39,15 @@ class CombinedCacheView(transformers.cache_utils.Cache):
             write_to: Optional[Sequence[CacheBlock]] = None,
             input_mask: Optional[torch.Tensor] = None,
             position_ids: Optional[torch.Tensor] = None,
-            rotary_cache: Optional[dict] = None,
+            override_length: Optional[int] = None,
+            rotary_cache: Optional[dict] = None
     ):
         super().__init__()
         assert write_to is None or len(write_to) == len(cache_structure)
         assert input_mask is None or len(input_mask) == len(cache_structure)
         assert position_ids is None or len(position_ids) == len(cache_structure)
         self.cache_structure, self.write_to, self.rotary_cache = cache_structure, write_to, rotary_cache
-        self.input_mask, self.position_ids = input_mask, position_ids
+        self.input_mask, self.position_ids, self.override_length = input_mask, position_ids, override_length
         if write_to is not None:
             assert all(write_target not in seq for write_target, seq in zip(self.cache_structure, self.write_to)), (
                 "Some of the write targets for workers are not parts of their cache structure. This may indicate that "
@@ -62,7 +64,7 @@ class CombinedCacheView(transformers.cache_utils.Cache):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """ combine multiple CacheBlocks to construct keys/values for each worker; write new entries to the chunk indicated in write_to (see __init__) """
         # if write_to is not specified, write to the last cache of each worker
-        num_workers, num_new_tokens = len(self.cache_structure), cache_kwargs["cache_position"].numel()
+        num_workers, num_new_tokens = len(self.cache_structure), key_states.shape[-2]
         write_to = [cache_seq[-1] for cache_seq in self.cache_structure] if self.write_to is None else self.write_to
         assert key_states.shape[0] == value_states.shape[0] == len(write_to) == num_workers
         assert key_states.shape[-2] == value_states.shape[-2] == num_new_tokens
@@ -72,31 +74,43 @@ class CombinedCacheView(transformers.cache_utils.Cache):
         else:
             assert self.input_mask.shape == (num_workers, num_new_tokens)
             assert not self.input_mask.dtype.is_floating_point, "mask must be int/bool"
-            position_selectors_by_worker = self.input_mask.to(dtype=torch.bool)
+            position_selectors_by_worker = self.input_mask.to(dtype=torch.bool, device=key_states.device)
         if self.position_ids is None:
             cache_position_by_worker = [cache_kwargs.get("cache_position")] * len(self.cache_structure)
         else:
-            assert self.position_ids.shape == (num_workers, num_new_tokens)
-            cache_position_by_worker = self.position_ids.flatten().split(split_size=num_new_tokens)
+            assert len(self.position_ids) == num_workers and len(self.position_ids[0]) == num_new_tokens
+            cache_position_by_worker = self.position_ids.to(device=key_states.device)
 
-        if cache_kwargs:
-            assert cache_kwargs.keys() == {'cache_position', 'cos', 'sin'}
+        if cache_kwargs.keys() == {'cos', 'sin', 'cache_position'}:  # llama/qwen style
+            assert 'cos' in cache_kwargs and 'sin' in cache_kwargs
             assert cache_kwargs['cache_position'].ndim == 1
-            assert cache_kwargs['cos'].ndim == cache_kwargs['sin'].ndim == 3
+            assert cache_kwargs['cos'].ndim == cache_kwargs['sin'].ndim == 3  # batch, ninp, dim
+            cache_kwargs_by_worker = [dict(
+                cache_position=cache_position[position_selector],
+                cos=cache_kwargs["cos"][worker_index: worker_index + 1, ..., position_selector, :],
+                sin=cache_kwargs["sin"][worker_index: worker_index + 1, ..., position_selector, :]
+            ) for worker_index, (cache_position, position_selector) in enumerate(
+                zip(cache_position_by_worker, position_selectors_by_worker))
+            ]
+        elif cache_kwargs.keys() == {'cos', 'sin'}:  # deepseek style
+            assert self.position_ids is not None
+            assert cache_kwargs['cos'].ndim == cache_kwargs['sin'].ndim == 2  # all_positions, dim
+            cache_kwargs_by_worker = [
+                dict(cache_kwargs, cache_position=cache_position[position_selector])
+                for cache_position, position_selector in zip(cache_position_by_worker, position_selectors_by_worker)]
+        else:
+            assert cache_kwargs is None, f"Unsupported cache_kwargs: {cache_kwargs}"
+            cache_kwargs_by_worker = [None] * num_workers
 
         with using_rotary_cache(self.rotary_cache):
             # first, update all write_to targets since they can also be inputs to other workers and affect offsets
-            for worker_index, (write_target, cache_position, position_selector) in enumerate(
-                    zip(write_to, cache_position_by_worker, position_selectors_by_worker)):
+            for worker_index, (write_target, position_selector, worker_cache_kwargs) in enumerate(
+                    zip(write_to, position_selectors_by_worker, cache_kwargs_by_worker)):
                 write_target.append(
                     key_states=key_states[worker_index: worker_index + 1, ..., position_selector, :],
                     value_states=value_states[worker_index: worker_index + 1, ..., position_selector, :],
                     layer_idx=layer_idx,
-                    cache_kwargs=dict(
-                        cache_position=cache_position[position_selector],
-                        cos=cache_kwargs["cos"][worker_index: worker_index + 1, ..., position_selector, :],
-                        sin=cache_kwargs["sin"][worker_index: worker_index + 1, ..., position_selector, :]
-                    ) if cache_kwargs else cache_kwargs  # else None or empty dict
+                    cache_kwargs=worker_cache_kwargs
                 )
 
             return combine_cache_from_structure(self.cache_structure, layer_idx=layer_idx)
@@ -106,6 +120,18 @@ class CombinedCacheView(transformers.cache_utils.Cache):
         worker_cache_lengths = [sum(cache_block.get_seq_length(layer_idx) for cache_block in worker_sequence)
                                 for worker_sequence in self.cache_structure]
         return max(worker_cache_lengths)
+
+    # v-- fixes https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad/modeling_deepseek.py#L1654
+    def get_max_length(self, *args, **kwargs):
+        pass
+
+    def get_max_cache_shape(self) -> Optional[int]:
+        return None
+
+    def get_usable_length(self, new_seq_length: int, layer_idx: Optional[int] = 0):
+        if self.override_length is not None:
+            return self.override_length - new_seq_length
+        return super().get_usable_length(new_seq_length, layer_idx=layer_idx)
 
 
 def combine_cache_from_structure(cache_structure: Sequence[Sequence[CacheBlock]], layer_idx: int) -> Tuple[

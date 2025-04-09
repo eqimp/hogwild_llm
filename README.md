@@ -37,9 +37,9 @@ pip install -r requirements.txt
 To try inference described in the paper you can run jupyter notebooks from notebooks/ folder:
 
 
-Contiguous layout (token-wise): [demo_hogwild_inference.ipynb](./notebooks/demo_hogwild_inference.ipynb)
+Simple example with minimal prompt: [__`basic_example.ipynb`__](./basic_example.ipynb)
 
-Interleaved layout (step-wise): [demo_hogwild_inference_interleaved_s1like.ipynb](./notebooks/demo_hogwild_inference.ipynb)
+Hogwild! Inference with full prompt: [__`full_example.ipynb`__](./full_example.ipynb)
 
 ## Cite
 

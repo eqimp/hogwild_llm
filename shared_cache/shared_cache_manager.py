@@ -92,7 +92,7 @@ class SharedCacheManager(nn.Module):
             use_cache=True,
             past_key_values=CombinedCacheView(
                 cache_structure=cache_structure, write_to=write_to,
-                input_mask=input_attention_mask, position_ids=position_ids,
+                input_mask=input_attention_mask, position_ids=position_ids, override_length=max_length_per_worker,
                 rotary_cache=dict()  # <-- start a new cache for RoPE cos/sin values that will last for one forward pass
             )
         )
