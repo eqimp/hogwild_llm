@@ -65,7 +65,7 @@ I will always see *other* assistants' incomplete thoughts first, and then, after
 
 Since we both write our thoughts in parallel, I will initially see only partial (unfinished) thoughts that will be continued in parallel with mine. Others' thoughts will appear at the end of their unfinished step, near {pivot_message}. Other assistants may write new thoughts while I am writing mine.
 
-I will use these partial thoughts to decide how best to collaborate without doing the same work twice. I will periodically check what other assistants are doing and I should my actions based on what they are doing so we collaborate efficiently.
+I will use these partial thoughts to decide how best to collaborate without doing the same work twice. I will periodically check what other assistants are doing and I should adjust my actions based on what they are doing so we collaborate efficiently.
 
 If what I am currently doing is the same that another assistant is doing or has already done, I will stop (e.g. {_w[0]} may say 'Wait, I was doing the same as {_w[1]} ...') and change to a different task right away.
 
@@ -181,9 +181,9 @@ For each ordered pair of real numbers $(x,y)$ satisfying \[\log_2(2x+y) = \log_4
     """.strip())
 
         suggestions_on_collaborating = f"""
-I will take into account what the other assistant is doing and change my actions accordngly. Here is how we can collaborate:
+I will take into account what the other assistant is doing and change my actions accordingly. Here is how we can collaborate:
 
-- **1. Strategizing:** we should think on how best to divide work between us ((e.g. if {_w[0]} writes: {_w[1]}, please do this, then {_w[1]} should take this into account). If we disagree about what to do, we will default to {_w[0]}'s version.
+- **1. Strategizing:** we should think on how best to divide work between us (e.g. if {_w[0]} writes: {_w[1]}, please do this, then {_w[1]} should take this into account). If we disagree about what to do, we will default to {_w[0]}'s version.
 - **2. Splitting:** we can split the problem into subtasks (simplify one equation or the other) and split the tasks between us. Prioritize subtasks that are not redundant (i.e. do not verify minor calculation done by another worker if there is another calculation that wasn't attempted yet).
 - **3. Alternatives:** we can each try to solve a problem with different methods (e.g. calculate a mathematical expression by brute force vs mathematical derivations) and see which approach is faster.
 - **4. Communicating:** we can look at each other's thoughts, ask each other questions (e.g. '{_w[0]}, which of these should I do first?'), give each other suggestions or corrections (e.g. 'Hey, {_w[1]}! You have a mistake in step 3 ...')
