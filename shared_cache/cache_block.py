@@ -8,6 +8,8 @@ import warnings
 from typing import Dict, Tuple, Any, Optional
 import torch
 import transformers
+import triton
+import triton.language as tl
 
 
 class CacheBlock(transformers.cache_utils.DynamicCache):
@@ -108,7 +110,11 @@ def rotate_by_offset(*, keys: torch.Tensor, offset: int, config: transformers.Pr
         cos, sin = _ROTARY_CACHE[cache_id]
     else:
         cos, sin = compute_rotary_cos_sin(offset, config, unsqueeze_dim, keys.dtype, keys.device)
-    return _apply_rotary_cos_sin(keys, cos, sin)
+
+    if int(os.environ.get("APPLY_ROTARY_COS_SIN_TRITON", "0")):
+        return _apply_rotary_cos_sin_triton(keys, cos, sin)
+    else:
+        return _apply_rotary_cos_sin(keys, cos, sin)
 
 
 def compute_rotary_cos_sin(
@@ -144,20 +150,67 @@ def _compute_rotary_cos_sin(
 
 @torch.compile(dynamic=None, disable=bool(int(os.environ.get("HOGWILD_NO_COMPILE", False))))
 def _apply_rotary_cos_sin(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+    # return x
     """Rotates half the hidden dims of the input."""
     x_dim, pe_dim = x.shape[-1], cos.shape[-1]
     x_pe = x
     if x_dim != pe_dim:
         x_pe = x[..., -pe_dim:]
 
-    x1 = x_pe[..., : x_pe.shape[-1] // 2]
-    x2 = x_pe[..., x_pe.shape[-1] // 2:]
+    x1, x2 = x_pe.chunk(2, dim=-1)
     x_pe_rotated_half = torch.cat((-x2, x1), dim=-1)
     y = (x_pe * cos) + (x_pe_rotated_half * sin)
     if x_dim != pe_dim:
         y = torch.cat([x[..., :-pe_dim], y], dim=-1)
     return y
 
+
+@triton.jit
+def apply_rotary_cos_sin_kernel(
+    x_ptr: tl.tensor, 
+    cos_ptr: tl.tensor, 
+    sin_ptr: tl.tensor,
+    out_ptr: tl.tensor,
+    BATCH_SIZE: int,
+    NUM_KV_HEADS: int,
+    HEAD_DIM: int,
+    L: int,
+    B0: tl.constexpr,
+    B1: tl.constexpr
+):
+  pid_0 = tl.program_id(0)
+  pid_1 = tl.program_id(1)
+
+  i_range = pid_0 * B0 + tl.arange(0, B0)
+  j1_range = pid_1 * B1 + tl.arange(0, B1)
+  j2_range = j1_range + HEAD_DIM // 2
+
+  x1_range = i_range[:, None] * HEAD_DIM + j1_range[None, :]
+  x1_mask = (i_range[:, None] < BATCH_SIZE * NUM_KV_HEADS * L) & (j1_range[None, :] < HEAD_DIM // 2)
+
+  x2_range = i_range[:, None] * HEAD_DIM + j2_range[None, :]
+  x2_mask = (i_range[:, None] < BATCH_SIZE * NUM_KV_HEADS * L) & (j2_range[None, :] < HEAD_DIM)
+
+  x1 = tl.load(x_ptr + x1_range, x1_mask, 0)
+  x2 = tl.load(x_ptr + x2_range, x2_mask, 0)
+
+  sin1 = tl.load(sin_ptr + j1_range, j1_range < HEAD_DIM // 2, 0)
+  sin2 = tl.load(sin_ptr + j2_range, j2_range < HEAD_DIM, 0)
+
+  cos1 = tl.load(cos_ptr + j1_range, j1_range < HEAD_DIM // 2, 0)
+  cos2 = tl.load(cos_ptr + j2_range, j2_range < HEAD_DIM, 0)
+
+  tl.store(out_ptr + x1_range, cos1 * x1 - sin1 * x2, x1_mask)
+  tl.store(out_ptr + x2_range, cos2 * x2 + sin2 * x1, x2_mask)
+
+
+def _apply_rotary_cos_sin_triton(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+  assert x.shape[-1] == cos.shape[-1]
+  batch_size, num_kv_heads, length, head_dim = x.shape
+  out = torch.empty_like(x)
+  grid = lambda meta: (triton.cdiv(num_kv_heads * length, meta['B0']), triton.cdiv(head_dim, meta['B1']))
+  apply_rotary_cos_sin_kernel[grid](x, cos, sin, out, batch_size, num_kv_heads, head_dim, length, B0=1, B1=32)
+  return out
 
 
 _CACHED_ROPE_PARAMS = _CACHED_ROPE_INIT = None  # this is a makeshift functools.lru_cache w/o hashing
