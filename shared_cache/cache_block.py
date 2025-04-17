@@ -124,7 +124,10 @@ def compute_rotary_cos_sin(
     # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
     device_type = device.type if isinstance(device.type, str) and device.type != "mps" else "cpu"
     with torch.autocast(device_type=device_type, enabled=False):
-        return _compute_rotary_cos_sin(offset, inv_freq, attention_scaling, unsqueeze_dim, dtype, device)
+        if int(os.environ.get("APPLY_ROTARY_COS_SIN_TRITON", "0")):
+            return _compute_rotary_cos_sin_triton(offset, inv_freq, attention_scaling, unsqueeze_dim, dtype, device)
+        else:
+            return _compute_rotary_cos_sin(offset, inv_freq, attention_scaling, unsqueeze_dim, dtype, device)
 
 
 @torch.compile(dynamic=True, disable=bool(int(os.environ.get("HOGWILD_NO_COMPILE", False))))
@@ -146,6 +149,46 @@ def _compute_rotary_cos_sin(
         cos = (cos * attention_scaling)
         sin = (sin * attention_scaling)
     return cos.to(dtype).unsqueeze(unsqueeze_dim), sin.to(dtype).unsqueeze(unsqueeze_dim)
+
+
+@triton.jit
+def compute_rotary_cos_sin_kernel(
+    inv_freq_ptr: tl.tensor,
+    cos_ptr: tl.tensor,
+    sin_ptr: tl.tensor,
+    offset: int,
+    attention_scaling: float, 
+    PE_DIM: int,
+    BLOCK_SIZE: tl.constexpr
+):
+    pid = tl.program_id(0)
+    offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+    inv_freq = tl.load(inv_freq_ptr + offsets, offsets < PE_DIM)
+    freq = offset * inv_freq
+    cos = attention_scaling * tl.cos(freq)
+    sin = attention_scaling * tl.sin(freq)
+    tl.store(cos_ptr + offsets, cos, offsets < PE_DIM)
+    tl.store(cos_ptr + offsets + PE_DIM, cos, offsets < PE_DIM)
+    tl.store(sin_ptr + offsets, sin, offsets < PE_DIM)
+    tl.store(sin_ptr + offsets + PE_DIM, sin, offsets < PE_DIM)
+
+def _compute_rotary_cos_sin_triton(
+    offset: int, 
+    inv_freq: torch.Tensor,
+    attention_scaling: float, 
+    unsqueeze_dim: int, 
+    dtype: torch.dtype, 
+    device: torch.device
+):
+    assert device.type == "cuda", "Only CUDA devices are supported"
+    pe_dim = inv_freq.shape[-1]
+    out_shape = [1, 1, 2 * pe_dim]
+    out_shape = out_shape[:unsqueeze_dim] + [1] + out_shape[unsqueeze_dim:]
+    cos = torch.zeros(out_shape, dtype=torch.float32, device=device)
+    sin = torch.zeros(out_shape, dtype=torch.float32, device=device)
+    grid = lambda meta: (triton.cdiv(pe_dim, meta['BLOCK_SIZE']),)
+    compute_rotary_cos_sin_kernel[grid](inv_freq.float(), cos, sin, offset, attention_scaling, pe_dim, BLOCK_SIZE=32)
+    return cos.to(dtype), sin.to(dtype)
 
 
 @torch.compile(dynamic=None, disable=bool(int(os.environ.get("HOGWILD_NO_COMPILE", False))))
