@@ -79,12 +79,15 @@ class CacheBlock(transformers.cache_utils.DynamicCache):
     def append_from(self, other: CacheBlock, keep_other: bool = True):
         """Add tokens from other to the end of this block in-place. If not keep_other, calls other.clear()"""
         assert len(other.key_cache) == len(other.value_cache)
+
+        other_worker_scale = 1.0
+        if other.is_worker_cache:
+            other_worker_scale = self.other_worker_scale
+
         for layer_idx in range(len(other.key_cache)):
             new_token_starting_position = self.first_available_positions_by_layer.setdefault(layer_idx, 0)
             other_position_span_size = other.first_available_positions_by_layer.get(layer_idx, 0)
-            other_worker_scale = 1.0
-            if self.is_worker_cache and new_token_starting_position > 0:
-                other_worker_scale = self.other_worker_scale
+
             super().update(
                 *other.get_kv_with_offset(layer_idx=layer_idx, offset=new_token_starting_position, key_scale=other_worker_scale),  # keys, values
                 layer_idx=layer_idx,   # cache_kwargs is omitted; we do not need it since :other: is already rotated.
