@@ -26,16 +26,25 @@ class CacheBlock(transformers.cache_utils.DynamicCache):
 
     """
 
-    def __init__(self, *args, config: transformers.PretrainedConfig, **kwargs):
+    def __init__(
+        self, 
+        *args, 
+        config: transformers.PretrainedConfig, 
+        is_worker_cache: bool = False, 
+        other_worker_scale: float = 1.0, 
+        **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self.config = config
+        self.is_worker_cache = is_worker_cache
+        self.other_worker_scale = other_worker_scale
         self.first_available_positions_by_layer = dict()
 
-    def get_kv_with_offset(self, *, layer_idx: int, offset: int):
+    def get_kv_with_offset(self, *, layer_idx: int, offset: int, key_scale: float = 1.0):
         """Get key-value pairs rotated so that the first value has position :offset:"""
         assert len(self.key_cache) > layer_idx, "cache must be fully populated before it can accept None args"
         key_cache, value_cache = self.key_cache[layer_idx], self.value_cache[layer_idx]
-        return rotate_by_offset(keys=key_cache, offset=offset, config=self.config), value_cache
+        return rotate_by_offset(keys=key_cache, offset=offset, config=self.config).mul(key_scale), value_cache
 
     def append(self, key_states: torch.Tensor, value_states: torch.Tensor, layer_idx: int, cache_kwargs: Dict[str, Any],
                ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -73,8 +82,11 @@ class CacheBlock(transformers.cache_utils.DynamicCache):
         for layer_idx in range(len(other.key_cache)):
             new_token_starting_position = self.first_available_positions_by_layer.setdefault(layer_idx, 0)
             other_position_span_size = other.first_available_positions_by_layer.get(layer_idx, 0)
+            other_worker_scale = 1.0
+            if self.is_worker_cache and new_token_starting_position > 0:
+                other_worker_scale = self.other_worker_scale
             super().update(
-                *other.get_kv_with_offset(layer_idx=layer_idx, offset=new_token_starting_position),  # keys, values
+                *other.get_kv_with_offset(layer_idx=layer_idx, offset=new_token_starting_position, key_scale=other_worker_scale),  # keys, values
                 layer_idx=layer_idx,   # cache_kwargs is omitted; we do not need it since :other: is already rotated.
             )
             self.first_available_positions_by_layer[layer_idx] += other_position_span_size
