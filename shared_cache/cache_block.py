@@ -251,7 +251,7 @@ def _apply_rotary_cos_sin_triton(x: torch.Tensor, cos: torch.Tensor, sin: torch.
     assert x.shape[-1] == cos.shape[-1]
     batch_size, num_kv_heads, length, head_dim = x.shape
     out = torch.empty_like(x)
-    grid = lambda meta: (triton.cdiv(num_kv_heads * length, meta['B0']), triton.cdiv(head_dim, meta['B1']))
+    grid = lambda meta: (triton.cdiv(batch_size * num_kv_heads * length, meta['B0']), triton.cdiv(head_dim, meta['B1']))
     apply_rotary_cos_sin_kernel[grid](x, cos, sin, out, batch_size, num_kv_heads, head_dim, length, B0=1, B1=32)
     return out
 
