@@ -11,6 +11,9 @@ import transformers
 import triton
 import triton.language as tl
 
+USE_TRITON = bool(os.environ.get("APPLY_ROTARY_COS_SIN_TRITON", "1"))
+print("--using triton")
+
 
 class CacheBlock(transformers.cache_utils.DynamicCache):
     """
@@ -111,7 +114,7 @@ def rotate_by_offset(*, keys: torch.Tensor, offset: int, config: transformers.Pr
     else:
         cos, sin = compute_rotary_cos_sin(offset, config, unsqueeze_dim, keys.dtype, keys.device)
 
-    if int(os.environ.get("APPLY_ROTARY_COS_SIN_TRITON", "0")):
+    if USE_TRITON:
         return _apply_rotary_cos_sin_triton(keys, cos, sin)
     else:
         return _apply_rotary_cos_sin(keys, cos, sin)
@@ -124,7 +127,7 @@ def compute_rotary_cos_sin(
     # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
     device_type = device.type if isinstance(device.type, str) and device.type != "mps" else "cpu"
     with torch.autocast(device_type=device_type, enabled=False):
-        if int(os.environ.get("APPLY_ROTARY_COS_SIN_TRITON", "0")):
+        if USE_TRITON:
             return _compute_rotary_cos_sin_triton(offset, inv_freq, attention_scaling, unsqueeze_dim, dtype, device)
         else:
             return _compute_rotary_cos_sin(offset, inv_freq, attention_scaling, unsqueeze_dim, dtype, device)
