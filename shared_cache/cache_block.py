@@ -11,7 +11,7 @@ import transformers
 import triton
 import triton.language as tl
 
-USE_TRITON = bool(os.environ.get("HOGWILD_USE_TRITON", "1"))
+USE_TRITON = bool(int(os.environ.get("HOGWILD_USE_TRITON", "1")))
 
 
 class CacheBlock(transformers.cache_utils.DynamicCache):
