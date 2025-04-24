@@ -109,7 +109,7 @@ def find_last_valid_result(
             try:
                 end = response.index(suffix, start)
                 return extract_result(response[start + len(prefix):end])
-            except Exception as e:  # missing suffix or extract_result failed
+            except Exception:  # missing suffix or extract_result failed
                 response = response[:start]
         except ValueError:
             return None
