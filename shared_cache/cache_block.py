@@ -11,6 +11,8 @@ import transformers
 import triton
 import triton.language as tl
 
+USE_TRITON = bool(int(os.environ.get("HOGWILD_USE_TRITON", "1")))
+
 
 class CacheBlock(transformers.cache_utils.DynamicCache):
     """
@@ -111,7 +113,7 @@ def rotate_by_offset(*, keys: torch.Tensor, offset: int, config: transformers.Pr
     else:
         cos, sin = compute_rotary_cos_sin(offset, config, unsqueeze_dim, keys.dtype, keys.device)
 
-    if int(os.environ.get("APPLY_ROTARY_COS_SIN_TRITON", "0")):
+    if USE_TRITON:
         return _apply_rotary_cos_sin_triton(keys, cos, sin)
     else:
         return _apply_rotary_cos_sin(keys, cos, sin)
@@ -124,7 +126,7 @@ def compute_rotary_cos_sin(
     # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
     device_type = device.type if isinstance(device.type, str) and device.type != "mps" else "cpu"
     with torch.autocast(device_type=device_type, enabled=False):
-        if int(os.environ.get("APPLY_ROTARY_COS_SIN_TRITON", "0")):
+        if USE_TRITON:
             return _compute_rotary_cos_sin_triton(offset, inv_freq, attention_scaling, unsqueeze_dim, dtype, device)
         else:
             return _compute_rotary_cos_sin(offset, inv_freq, attention_scaling, unsqueeze_dim, dtype, device)
@@ -157,7 +159,7 @@ def compute_rotary_cos_sin_kernel(
     cos_ptr: tl.tensor,
     sin_ptr: tl.tensor,
     offset: int,
-    attention_scaling: float, 
+    attention_scaling: float,
     PE_DIM: int,
     BLOCK_SIZE: tl.constexpr
 ):
@@ -174,11 +176,11 @@ def compute_rotary_cos_sin_kernel(
 
 
 def _compute_rotary_cos_sin_triton(
-    offset: int, 
+    offset: int,
     inv_freq: torch.Tensor,
-    attention_scaling: float, 
-    unsqueeze_dim: int, 
-    dtype: torch.dtype, 
+    attention_scaling: float,
+    unsqueeze_dim: int,
+    dtype: torch.dtype,
     device: torch.device
 ):
     assert device.type == "cuda", "Only CUDA devices are supported"
@@ -210,8 +212,8 @@ def _apply_rotary_cos_sin(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor)
 
 @triton.jit
 def apply_rotary_cos_sin_kernel(
-    x_ptr: tl.tensor, 
-    cos_ptr: tl.tensor, 
+    x_ptr: tl.tensor,
+    cos_ptr: tl.tensor,
     sin_ptr: tl.tensor,
     out_ptr: tl.tensor,
     BATCH_SIZE: int,
