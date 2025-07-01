@@ -41,6 +41,9 @@ Hogwild! Inference with full prompt: [__`full_example.ipynb`__](./full_example.i
 
 Minimal colab example with Llama-3.2 3B and very limited collaboration: [__`colab_example.ipynb`__](./colab_example.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/eqimp/hogwild_llm/blob/main/colab_example.ipynb)
 
+# Fast Inference Kernels 
+TODO
+
 ## Cite
 
 If you found this work useful, please consider citing:
