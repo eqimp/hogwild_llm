@@ -50,7 +50,9 @@ pip install -e . # ensure you have nvcc cuda compiler in PATH or export CUDACXX=
 ```
 
 to install the necessary module.
-You can test it using the notebook `hogwild_with_fast_kernels.ipynb`.
+You can test it using the notebook `hogwild_with_fast_kernels.ipynb`. 
+
+Kernels were optimized for the L40 and similar GPUs.
 
 ## Cite
 
