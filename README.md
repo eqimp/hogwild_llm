@@ -46,7 +46,7 @@ Minimal colab example with Llama-3.2 3B and very limited collaboration: [__`cola
 To use fast inference kernels, go to the `inference_lib` folder and run:
 
 ```bash
-pip install -e .
+pip install -e . # ensure you have nvcc cuda compiler in PATH or export CUDACXX=/TODO/path/to/nvcc
 ```
 
 to install the necessary module.
