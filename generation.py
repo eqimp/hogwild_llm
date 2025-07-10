@@ -10,10 +10,14 @@ import shared_cache
 from formatting import FormattingBase, MathFormatting
 
 ReasoningState = NamedTuple("ReasoningState", (
-    ("history", Sequence[int]), ("current_step_tokens_by_worker", Sequence[Sequence[int]]), ("finished", bool)),)
+    ("history", Sequence[int]), ("current_step_tokens_by_worker", Sequence[Sequence[int]])),)
 
 
-def solve_math_2agents(
+def solve_math_2agents(*args, **kwargs):
+    raise NotImplementedError("""Use solve_task_2agents""")
+
+
+def solve_task_2agents(
         *,
         problem: str,
         model: transformers.PreTrainedModel,
@@ -22,16 +26,24 @@ def solve_math_2agents(
         fmt: Optional[FormattingBase] = None,
         **reasoning_kwargs,
 ) -> Dict[int, str]:
-    """Generate reasoning traces with 2 parallel agents, return responses (with s1-like finisher) & reasoning states"""
+    """Generate reasoning traces with 2 parallel agents, return responses (with s1-like finisher)"""
     fmt = fmt if fmt is not None else MathFormatting(tokenizer)
     saved_reasoning_states = generate_reasoning_2agents(
         problem=problem, model=model, tokenizer=tokenizer, fmt=fmt, **reasoning_kwargs)
-    outputs = {
-        budget: compile_response_with_s1_finisher(
-            problem=problem, model=model, tokenizer=tokenizer, fmt=fmt,
-            reasoning_state=reasoning_state, max_new_tokens=finisher_max_new_tokens
-        ) for budget, reasoning_state in saved_reasoning_states.items()
-    }
+    outputs = dict()
+    for budget, reasoning_state in saved_reasoning_states.items():
+        generated_tokens = list(reasoning_state.history)
+        generated_tokens.extend(tokenizer.encode(fmt.current_step_header, add_special_tokens=False))
+        for worker_index, worker_tokens in enumerate(reasoning_state.current_step_tokens_by_worker):
+            generated_tokens.extend(worker_tokens)
+            generated_tokens.extend(tokenizer.encode(fmt.incomplete_step + fmt.sep, add_special_tokens=False))
+        problem_tokens = list(tokenizer.encode(fmt.apply_chat_template(problem), add_special_tokens=False))
+        response = tokenizer.decode(problem_tokens + generated_tokens)
+        if finisher_max_new_tokens > 0 and (fmt.get_final_answer(tokenizer.decode(generated_tokens)) is None):
+            response = finalize_response_with_s1_finisher(
+                response=response, model=model, tokenizer=tokenizer, fmt=fmt, max_new_tokens=finisher_max_new_tokens
+            )
+        outputs[budget] = response
     return outputs
 
 
@@ -43,12 +55,13 @@ def generate_reasoning_2agents(
         fmt: FormattingBase,
         max_steps: int,
         save_on_steps: Sequence[int] = (),
-        insert_s1_collab_message_every_tokens: int = 256,
+        insert_s1_collab_message_every_tokens: int = 1024,
+        suppress_tokens: Sequence[int] = (),
 ) -> Dict[int, ReasoningState]:
     """Generate reasoning traces and return snapshot for a given max_steps and any extra snapshots for save_on_steps"""
     assert all(save_step <= max_steps for save_step in save_on_steps), save_on_steps
     saved_states = dict()
-    logits_processor = get_logits_processor(model, fmt.forbidden_token_ix)
+    logits_processor = get_logits_processor(model, suppress_tokens)
     device = next(model.parameters()).device
     tokenizer_kwargs = dict(return_tensors='pt', padding=True, padding_side='left', add_special_tokens=False)
 
@@ -62,7 +75,7 @@ def generate_reasoning_2agents(
 
     # pre-fill common cache parts
     with torch.inference_mode():
-        model(**tokenizer(fmt.get_full_prompt(problem), **tokenizer_kwargs).to(device),
+        model(**tokenizer(fmt.apply_chat_template(problem), **tokenizer_kwargs).to(device),
               use_cache=True, past_key_values=cache_common)  # <-- write to common prompt
 
         model(**tokenizer(fmt.current_step_header, **tokenizer_kwargs).to(device),
@@ -75,19 +88,9 @@ def generate_reasoning_2agents(
     current_step_index_by_worker = [1, 1]
     current_step_tokens_by_worker = tokenizer(list(fmt.worker_prompts), add_special_tokens=False)['input_ids']
     history = list()
-    generation_finished = False
 
     next_inputs = tokenizer(list(fmt.worker_prompts), **tokenizer_kwargs).to(device)
-    for inference_step in range(max_steps + 1):
-        if inference_step in save_on_steps or inference_step == max_steps:
-            saved_states[inference_step] = ReasoningState(
-                history=list(history),
-                current_step_tokens_by_worker=deepcopy(current_step_tokens_by_worker),
-                finished=generation_finished or any(map(fmt.should_finish_reasoning, current_step_tokens_by_worker)),
-            )
-        if generation_finished or (inference_step == max_steps):
-            continue  # if the generation finished early, copy the generation state for the rest of the budget
-
+    for inference_step in range(max_steps):
         # run model with a shared cache (batched inference)
         with torch.inference_mode():
             logits = model(**cm.get_input_kwargs(**next_inputs)).logits[..., -1, :]
@@ -102,8 +105,6 @@ def generate_reasoning_2agents(
                 zip(fmt.workers, current_step_tokens_by_worker, new_tokens.tolist())):
             worker_tokens.append(new_token)
             if fmt.is_end_of_step(worker_tokens):
-                if fmt.should_finish_reasoning(worker_tokens):
-                    generation_finished = True
                 # worker just finished their step - add it to common history and start a new step
                 current_step_index_by_worker[worker_index] += 1
                 history.extend(worker_tokens)
@@ -119,28 +120,34 @@ def generate_reasoning_2agents(
             tokens_since_last_wait += len(next_input_tokens[worker_index])
         next_inputs = tokenizer.pad(
             dict(input_ids=next_input_tokens), padding_side='left', return_tensors='pt').to(device)
+
+        if torch.any(new_tokens == tokenizer.eos_token_id).item():
+            break  # at least one worker generated the end-of-sequence token, finish early
+
+        if inference_step in save_on_steps:
+            saved_states[inference_step] = ReasoningState(
+                history=list(history), current_step_tokens_by_worker=deepcopy(current_step_tokens_by_worker),
+            )
+
+    # if we finished early, copy the reasoning state for all subsequent budgets
+    for step_to_save in set(save_on_steps) | {max_steps}:
+        if step_to_save not in saved_states:
+            saved_states[step_to_save] = ReasoningState(
+                history=list(history), current_step_tokens_by_worker=deepcopy(current_step_tokens_by_worker),
+            )
     return saved_states
 
 
-@torch.inference_mode()
-def compile_response_with_s1_finisher(
-        *, problem: str, model: transformers.PreTrainedModel, tokenizer: transformers.PreTrainedTokenizer,
-        fmt: FormattingBase, reasoning_state: ReasoningState, max_new_tokens: int, chunk_size: int = 4096) -> str:
+def finalize_response_with_s1_finisher(
+        *, response: str, model: transformers.PreTrainedModel, tokenizer: transformers.PreTrainedTokenizer,
+        fmt: FormattingBase, max_new_tokens: int, chunk_size: int = 4096) -> str:
     """Compile a response from a reasoning state. If there is no answer yet, prompt the model to give the answer"""
-    problem_ids = list(tokenizer.encode(fmt.get_full_prompt(problem), add_special_tokens=False))
-
-    output = list(problem_ids) + list(reasoning_state.history)
-    output.extend(tokenizer.encode(fmt.current_step_header, add_special_tokens=False))
-    for worker_index, worker_tokens in enumerate(reasoning_state.current_step_tokens_by_worker):
-        output.extend(worker_tokens)
-        output.extend(tokenizer.encode(fmt.pivot_message + fmt.sep, add_special_tokens=False))
-
-    response: str = tokenizer.decode(output)
-    if max_new_tokens > 0 and (fmt.get_final_answer(response) is None):
+    with torch.inference_mode():
         device = next(model.parameters()).device
         response_ids = tokenizer.encode(response + fmt.s1_finisher_suffix, add_special_tokens=False)
         assert isinstance(response_ids, Sequence) and isinstance(response_ids[0], int)
-
+        prefix_num_tokens = len(tokenizer.encode(response, add_special_tokens=False))
+        assert prefix_num_tokens < len(response_ids)
         cache = transformers.DynamicCache()
 
         # encode prompt in chunks to save memory
@@ -159,20 +166,21 @@ def compile_response_with_s1_finisher(
         next_tokens = next_logits.argmax(-1, keepdims=True)  # [batch_size(1), 1]
         response_ids.append(next_tokens.item())
         for inference_step in range(max_new_tokens - 1):
+            full_mask = torch.ones(next_tokens.shape[0], len(response_ids), device=device, dtype=torch.int64)
             next_logits = model(
-                input_ids=next_tokens,
-                attention_mask=torch.ones(next_tokens.shape[0], len(response_ids), device=device, dtype=torch.int64),
-                use_cache=True, past_key_values=cache
+                input_ids=next_tokens, attention_mask=full_mask, use_cache=True, past_key_values=cache
             ).logits[..., -1, :]
             next_tokens = next_logits.argmax(-1, keepdims=True)  # [batch_size(1), 1]
             response_ids.append(next_tokens.item())
             if response_ids[-1] == tokenizer.eos_token_id:
                 break
+            if fmt.get_final_answer(tokenizer.decode(response_ids[prefix_num_tokens:])) is not None:
+                break  # generated a valid response - finish early
         response: str = tokenizer.decode(response_ids)
     return response
 
 
-def get_logits_processor(model: transformers.PreTrainedModel, forbidden_token_ix: Sequence[int]):
+def get_logits_processor(model: transformers.PreTrainedModel, suppress_tokens: Sequence[int] = ()):
     """Create a transformers class that post-processes model logits for nucleus sampling, banned tokens, etc"""
     generation_config, model_kwargs = model._prepare_generation_config(model.generation_config)
     model._prepare_special_tokens(generation_config)
@@ -184,7 +192,7 @@ def get_logits_processor(model: transformers.PreTrainedModel, forbidden_token_ix
         prefix_allowed_tokens_fn=None,
         logits_processor=transformers.LogitsProcessorList([
             transformers.generation.logits_process.SuppressTokensLogitsProcessor(
-                forbidden_token_ix, device=device)]),
+                suppress_tokens, device=device)]),
         device=device,
         model_kwargs=model_kwargs
     )
