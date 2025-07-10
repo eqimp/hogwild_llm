@@ -3,7 +3,7 @@ datasets==3.5.0
 numpy>=2.2.4
 tokenizers==0.21.1
 torch>=2.6.0
-transformers==4.50.3
+transformers==4.51.3
 wandb>=0.17.2
+rpyc>=6.0.0
 tqdm
-rpyc
