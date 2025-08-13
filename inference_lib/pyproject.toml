@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "hogwild"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
   { name = "Erik Schultheis", email = "erik.schultheis@ist.ac.at" },
   { name = "Vage Egiazarian", email = "vage.egiazarian@ist.ac.at" },

@@ -17,4 +17,5 @@ def dynamic_metadata(
 def get_requires_for_dynamic_metadata(
         _settings: "dict[str, object] | None" = None,
 ) -> list[str]:
-    return ["torch"]
+    # transformers 4.53 is broken with qwen3
+    return ["torch", "transformers<=4.52"]
