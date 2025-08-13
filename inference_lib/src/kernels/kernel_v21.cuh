@@ -197,6 +197,7 @@ __global__ __launch_bounds__(256) void hogwild_attention_gpu_kernel21(
     using stats_t = GenericVector<float, 2>;
 
     __syncthreads();
+    // Each sub-warp stores its local softmax statistics to shared memory
     #pragma unroll
     for (int gqa = 0; gqa < GQA; ++gqa) {
         // combine split-k results
@@ -209,6 +210,8 @@ __global__ __launch_bounds__(256) void hogwild_attention_gpu_kernel21(
     }
 
     __syncthreads();
+
+    // Reduce stats over the entire block
     #pragma unroll
     for (int gqa = 0; gqa < GQA; ++gqa) {
         float r_max = maximum[gqa];
@@ -253,18 +256,21 @@ __global__ __launch_bounds__(256) void hogwild_attention_gpu_kernel21(
     }
 
     __syncthreads();
-    #pragma unroll
-    for (int gqa = 0; gqa < GQA; ++gqa) {
-        if (sub_warp.meta_group_rank() % (WarpSize / SubWarpSize) == 0) {
-            for (int ee = 0; ee < VPH_v; ++ee) {
-                int e = (ee * SubWarpSize + sub_warp.thread_rank()) * VecSize;
-                full_fvec_t store;
-                for (int j = 0; j < VecSize; ++j) {
-                    store[j] = v_cache[gqa][ee * VecSize + j];
+
+    // we've reduced within one warp, so now only one subwarp per warp has
+    // to write global results
+    if (sub_warp.meta_group_rank() % (WarpSize / SubWarpSize) == 0) {
+        #pragma unroll
+        for (int gqa = 0; gqa < GQA; ++gqa) {
+                for (int ee = 0; ee < VPH_v; ++ee) {
+                    int e = (ee * SubWarpSize + sub_warp.thread_rank()) * VecSize;
+                    full_fvec_t store;
+                    for (int j = 0; j < VecSize; ++j) {
+                        store[j] = v_cache[gqa][ee * VecSize + j];
+                    }
+                    store.store(scratch + e + Ev * sub_warp.meta_group_rank() / (WarpSize / SubWarpSize) + gqa * 256 / WarpSize * Ev);
                 }
-                store.store(scratch + e + Ev * sub_warp.meta_group_rank() / (WarpSize / SubWarpSize) + gqa * 256 / WarpSize * Ev);
             }
-        }
     }
     __syncthreads();
 
@@ -382,18 +388,29 @@ cudaError_t hogwild_attention_gpu(scalar_t* out, float scale,
         workspace_size = required_workspace;
     }
 
-    if (shape.E == 128 && shape.Ev == 128 && shape.Hq == shape.Hkv * 5) {
-        CUDA_RETURN_ON_ERROR(cudaFuncSetAttribute(hogwild_attention_gpu_kernel21<128, 128, 5, scalar_t>,
-                             cudaFuncAttributeMaxDynamicSharedMemorySize, smem));
-        hogwild_attention_gpu_kernel21<128, 128, 5><<<grid_dim, block_dim, smem>>>(
-                out, workspace, scale, locations, queries, fragment_lengths, key_fragments, value_fragments, shape);
+    if (shape.E == 128 && shape.Ev == 128) {
+        if(shape.Hq == shape.Hkv * 5) {
+            CUDA_RETURN_ON_ERROR(cudaFuncSetAttribute(hogwild_attention_gpu_kernel21<128, 128, 5, scalar_t>,
+                                                      cudaFuncAttributeMaxDynamicSharedMemorySize, smem));
+            hogwild_attention_gpu_kernel21<128, 128, 5><<<grid_dim, block_dim, smem>>>(
+                    out, workspace, scale, locations, queries, fragment_lengths, key_fragments, value_fragments, shape);
+        } else if(shape.Hq == shape.Hkv * 8) {
+            CUDA_RETURN_ON_ERROR(cudaFuncSetAttribute(hogwild_attention_gpu_kernel21<128, 128, 8, scalar_t>,
+                                                      cudaFuncAttributeMaxDynamicSharedMemorySize, smem));
+            hogwild_attention_gpu_kernel21<128, 128, 8><<<grid_dim, block_dim, smem>>>(
+                    out, workspace, scale, locations, queries, fragment_lengths, key_fragments, value_fragments, shape);
+        } else {
+            printf("Unsupported GQA\n");
+            return cudaError_t::cudaErrorNotYetImplemented;
+        }
 
         dim3 r_grid_dim{(unsigned)shape.Hq, (unsigned)shape.W * (unsigned)shape.S, 1};
         hogwild_attention_reduce_kernel<128><<<r_grid_dim, 32>>>(
                 out, (float*)workspace, (float*)workspace + splits * shape.W * shape.Hq * shape.S * shape.Ev,
                 splits, shape);
     } else {
-        printf("Unsupported head dimension");
+        printf("Unsupported head dimension\n");
+        return cudaError_t::cudaErrorNotYetImplemented;
     }
     return cudaGetLastError();
 }

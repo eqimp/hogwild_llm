@@ -138,10 +138,11 @@ void run_benchmarks(const Shape& shape, int prefix_length, bool profile, const s
         try {
             // if we're not running with the profiler, do warm-up
             if (!profile) {
-                hogwild_attention_gpu_dispatch(d_output, 1.f / sqrtf(128), d_locations, d_queries, d_frag_lengths,
-                                               (const scalar_t **) d_keys_ptr, (const scalar_t **) d_values_ptr, test.Shape,
-                                               kernel_id);
-                CUDA_CHECK_THROW(cudaGetLastError());
+                auto err = hogwild_attention_gpu_dispatch(
+                        d_output, 1.f / sqrtf(128), d_locations, d_queries, d_frag_lengths,
+                        (const scalar_t **) d_keys_ptr, (const scalar_t **) d_values_ptr, test.Shape,
+                        kernel_id);
+                CUDA_CHECK_THROW(err);
                 CUDA_CHECK_THROW(cudaDeviceSynchronize());
             }
             auto start = std::chrono::steady_clock::now();
@@ -152,10 +153,11 @@ void run_benchmarks(const Shape& shape, int prefix_length, bool profile, const s
                 CUDA_CHECK_THROW(cudaMemset(thrash, 0, 1024 * 1024 * 1024));   // clear L2 cache
                 CUDA_CHECK_THROW(cudaDeviceSynchronize());
                 auto start_kernel = std::chrono::steady_clock::now();
-                hogwild_attention_gpu_dispatch(d_output, 1.f / sqrtf(128), d_locations, d_queries, d_frag_lengths,
-                                               (const scalar_t **) d_keys_ptr, (const scalar_t **) d_values_ptr, test.Shape,
-                                               kernel_id);
-                CUDA_CHECK_THROW(cudaGetLastError());
+                auto err = hogwild_attention_gpu_dispatch(
+                        d_output, 1.f / sqrtf(128), d_locations, d_queries, d_frag_lengths,
+                        (const scalar_t **) d_keys_ptr, (const scalar_t **) d_values_ptr, test.Shape,
+                        kernel_id);
+                CUDA_CHECK_THROW(err);
                 CUDA_CHECK_THROW(cudaDeviceSynchronize());
                 duration += std::chrono::duration_cast<std::chrono::microseconds>(
                         std::chrono::steady_clock::now() - start_kernel).count();
@@ -183,6 +185,8 @@ int main(int argc, const char** argv) {
     app.add_option("--kernel", kernels, "Which kernel version to profile");
     app.add_option("--dtype", dtype, "bf16|fp16|fp32");
 
+    CLI11_PARSE(app, argc, argv);
+
     std::vector<std::string> all_kernels = {};
     if(kernels == "all") {
         all_kernels.assign(get_all_versions().begin(), get_all_versions().end());
@@ -190,7 +194,6 @@ int main(int argc, const char** argv) {
         all_kernels.push_back(kernels);
     }
 
-    CLI11_PARSE(app, argc, argv);
     Shape shape{4, 2, 40, 8, 128, 128, 1};
     if(dtype == "bf16") {
         run_benchmarks<nv_bfloat16>(shape, prefix_length, profile, all_kernels);
